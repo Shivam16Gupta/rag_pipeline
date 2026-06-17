@@ -1,0 +1,89 @@
+Phase 4 – Polish & Deploy,,,,
+Weeks 5–6,,,,
+,,,,
+Step,Tag,What to do,Example code,Interview tip
+Feedback loop,SQLite + thumbs up/down,"Add thumbs up / thumbs down buttons on the result panel. Store each piece of feedback in a SQLite table alongside the log chunk and LLM response. This data lets you iterate on your system prompt over time — and in an interview, it shows you think about ML feedback loops, not just one-shot predictions.","# backend/feedback.py
+import sqlite3, datetime
+
+DB = 'feedback.db'
+
+def init_db():
+    con = sqlite3.connect(DB)
+    con.execute('''
+        CREATE TABLE IF NOT EXISTS feedback (
+            id INTEGER PRIMARY KEY,
+            log_chunk TEXT,
+            llm_response TEXT,
+            rating INTEGER,
+            created_at TEXT
+        )''')
+    con.commit(); con.close()
+
+def save_feedback(log_chunk, llm_response, rating):
+    con = sqlite3.connect(DB)
+    con.execute(
+        'INSERT INTO feedback VALUES (NULL,?,?,?,?)',
+        (log_chunk, llm_response, rating,
+         datetime.datetime.utcnow().isoformat())
+    )
+    con.commit(); con.close()","SQLite requires zero infrastructure — no Docker service, no credentials. Perfect for a portfolio project. Swap to Postgres only when you actually need concurrent writes."
+Dockerize & deploy,Docker + docker-compose + EC2,Write a Dockerfile for the FastAPI backend and a separate one for the React frontend (built with Nginx). A docker-compose.yml wires them together so anyone can spin up the whole project with one command. Deploy to EC2 (free tier) or Railway for a live URL you can demo in interviews.,"# docker-compose.yml
+version: '3.9'
+services:
+  backend:
+    build: ./backend
+    ports: ['8000:8000']
+    env_file: .env
+    volumes: ['./feedback.db:/app/feedback.db']
+  frontend:
+    build: ./frontend
+    ports: ['3000:80']
+    depends_on: [backend]
+
+# backend/Dockerfile
+FROM python:3.12-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+COPY . .
+CMD ['uvicorn', 'main:app', '--host', '0.0.0.0', '--port', '8000']
+
+# frontend/Dockerfile
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY package*.json .
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM nginx:alpine
+COPY --from=build /app/dist /usr/share/nginx/html","A live URL changes the interview dynamic. Instead of describing the project, you open your laptop and show it. That's a strong signal for a product-first company like Consuma."
+README & write-up,architecture doc + GitHub,"Write a README that covers: what the project does, a simple architecture diagram, how to run it locally, and three 'engineering decisions' paragraphs — why you chunked tokens, why you added the pre-filter, and why you chose streaming. These three paragraphs are what will actually get discussed in your technical interview.","# README.md structure
+
+## LLM Debugging Tool
+> Paste a log file, get a root cause analysis in seconds.
+
+## Architecture
+  React (Vite) --> FastAPI --> OpenAI API
+                          --> Pattern pre-filter (local, free)
+                          --> SQLite (feedback store)
+
+## Run locally
+  cp .env.example .env   # add OPENAI_API_KEY
+  docker compose up
+
+## Key engineering decisions
+
+### 1. Token chunking
+Long logs are filtered to ERROR/WARN lines, then truncated to 3000
+tokens using tiktoken. This keeps costs predictable and avoids
+context-window errors.
+
+### 2. Pattern pre-filter
+Known error signatures (OOMKilled, ECONNREFUSED) return a local
+result without hitting the LLM. Saves ~$0.001/request and responds
+in <5ms vs ~2s.
+
+### 3. Streaming
+The backend streams tokens via SSE so the UI updates in real-time
+rather than waiting for the full response.","The 'engineering decisions' section is the most important part of your README. It's what interviewers read to assess seniority — anyone can call an API, few can explain the tradeoffs they made."
