@@ -7,5 +7,5 @@ ipykernel
 sentence-transformers
 faiss-cpu
 chromadb
-langchain-groq
+langchain-openai
 python-dotenv
