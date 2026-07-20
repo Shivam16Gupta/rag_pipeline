@@ -28,7 +28,7 @@ class FaissVectorStore:
         self.save()
         print(f"[INFO] Vector store built and saved to {self.persist_dir}")
 
-    def add_embeddings(self, embeddings: np.ndarray, metadatas: List[Any] = None):
+    def add_embeddings(self, embeddings: np.ndarray, metadatas: List[Any] = None):  
         dim = embeddings.shape[1]
         if self.index is None:
             self.index = faiss.IndexFlatL2(dim)
@@ -69,6 +69,7 @@ class FaissVectorStore:
 # Example usage
 if __name__ == "__main__":
     from data_loader import load_all_documents
+
     docs = load_all_documents("data")
     store = FaissVectorStore("faiss_store")
     store.build_from_documents(docs)
